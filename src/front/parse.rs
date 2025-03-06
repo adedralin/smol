@@ -58,6 +58,7 @@ impl<'a> Parser<'a> {
         self.peek().map(|t| t.kind == kind).unwrap_or(false)
     }
 
+    // Consume the token of given kind if able, return whether it is consumed
     fn eat(&mut self, kind: TokenKind) -> bool {
         if self.next_is(kind) {
             self.tokens.pop();
@@ -67,6 +68,7 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Expect a token of given kind
     fn expect(&mut self, kind: TokenKind) -> ParseResult<Token> {
         if self.next_is(kind) {
             self.next()
@@ -83,31 +85,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_program(&mut self) -> ParseResult<Program> {
-        let mut stmts = vec![];
-
-        while !self.tokens.is_empty() {
-            stmts.push(self.parse_stmt()?);
-        }
-
-        Ok(Program { stmts })
+        todo!()
     }
 
     fn parse_stmt(&mut self) -> ParseResult<Stmt> {
         let tok = self.next()?;
         match tok.kind {
-            TokenKind::Assign => {
-                let lhs = id(self.expect(TokenKind::Id)?.text);
-                let rhs = self.parse_expr()?;
-                Ok(Stmt::Assign(lhs, rhs))
-            }
-            TokenKind::Print => Ok(Stmt::Print(self.parse_expr()?)),
-            TokenKind::Read => Ok(Stmt::Read(id(self.expect(TokenKind::Id)?.text))),
-            TokenKind::If => {
-                let guard = self.parse_expr()?;
-                let tt = self.parse_block()?;
-                let ff = self.parse_block()?;
-                Ok(Stmt::If { guard, tt, ff })
-            }
+            TokenKind::Assign => todo!(),
+            TokenKind::Print => todo!(),
+            TokenKind::Read => todo!(),
+            TokenKind::If => todo!(),
             _ => Err(ParseError(format!(
                 "Expected start of a statement, found {}",
                 tok.text
@@ -132,14 +119,14 @@ impl<'a> Parser<'a> {
         let tok = self.next()?;
 
         match tok.kind {
-            TokenKind::Id => Ok(Var(id(tok.text))),
-            TokenKind::Num => Ok(Const(tok.text.parse().unwrap())),
-            TokenKind::Plus => self.parse_binop(BOp::Add),
-            TokenKind::Minus => self.parse_binop(BOp::Sub),
-            TokenKind::Mul => self.parse_binop(BOp::Mul),
-            TokenKind::Div => self.parse_binop(BOp::Div),
-            TokenKind::Lt => self.parse_binop(BOp::Lt),
-            TokenKind::Tilde => Ok(Negate(Box::new(self.parse_expr()?))),
+            TokenKind::Id => todo!(),
+            TokenKind::Num => todo!(),
+            TokenKind::Plus => todo!(),
+            TokenKind::Minus => todo!(),
+            TokenKind::Mul => todo!(),
+            TokenKind::Div => todo!(),
+            TokenKind::Lt => todo!(),
+            TokenKind::Tilde => todo!(),
             _ => Err(ParseError(format!(
                 "Expected start of a statement, found {}",
                 tok.text
