@@ -95,7 +95,22 @@ impl Lower {
                 self.tv.push(Inner(Instruction::Read(x)));
             }
             Stmt::If { guard, tt, ff } => {
-                todo!()
+                let lbl_tt = self.mk_label();
+                let lbl_ff = self.mk_label();
+                let lbl_join = self.mk_label();
+                let guard = self.lower_expr(guard);
+                self.tv.push(Term(Terminator::Branch { guard, tt: lbl_tt, ff: lbl_ff }));
+                self.tv.push(Label(lbl_tt));
+                for stmt in tt {
+                    self.lower_stmt(stmt);
+                }
+                self.tv.push(Term(Terminator::Jump(lbl_join)));
+                self.tv.push(Label(lbl_ff));
+                for stmt in ff {
+                    self.lower_stmt(stmt);
+                }
+                self.tv.push(Term(Terminator::Jump(lbl_join)));
+                self.tv.push(Label(lbl_join));
             },
         }
     }
@@ -128,7 +143,9 @@ impl Lower {
 
     fn mk_var(&mut self, prefix: &str) -> Id {
         self.fresh_ctr += 1;
-        id(&format!("{prefix}_{}", self.fresh_ctr))
+        let x = id(&format!("{prefix}_{}", self.fresh_ctr));
+        self.decl.insert(x);
+        x
     }
 
     fn mk_label(&mut self) -> Id {
