@@ -102,41 +102,40 @@ impl<'input> Lexer<'input> {
     /// Get the next token if possible.
     pub fn next<'a>(&'a mut self) -> Option<Token<'input>> {
         self.skip_whitespace();
-        
         if self.end_of_input() {
             return None;
         }
 
-        for (regex, kind) in &self.matchers {
-            if let Some(m) = regex.find(&self.input[self.pos..]) {
-                let token = Token {
-                    kind: *kind,
-                    text: &self.input[self.pos..self.pos + m.end()],
-                };
-                self.pos += m.end();
-                return Some(token);
+        let mut kind = Error;
+        let mut len = 1;
+
+        for (re, kind_for_re) in &self.matchers {
+            if let Some(m) = re.find(&self.input[self.pos..]) {
+                kind = *kind_for_re;
+                len = m.len();
+                break;
             }
         }
 
-        // If no match, return an error token for unrecognized characters.
-        let error_char = &self.input[self.pos..self.pos + 1];
-        self.pos += 1;
-        Some(Token {
-            kind: TokenKind::Error,
-            text: error_char,
-        })
+        let token = Token {
+            kind,
+            text: &self.input[self.pos..(self.pos + len)],
+        };
+
+        self.pos += len;
+
+        Some(token)
     }
 }
 
 /// Read all the tokens from input
 pub fn get_tokens(input: &str) -> Vec<Token> {
     let mut lexer = Lexer::new(input);
-    let mut tokens = Vec::new();
 
+    let mut tokens = vec![];
     while let Some(token) = lexer.next() {
         tokens.push(token);
     }
-
     tokens
 }
 
@@ -259,7 +258,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            get_tokens("x yz $print $read $if { } +  0   -  //hi\n * $ read / < "),
+            get_tokens("x yz $print $read $if { } +  0   -  //hi\n * $ read / < ~"),
             vec![
                 id("x"),
                 id("yz"),
@@ -276,6 +275,7 @@ mod tests {
                 id("read"),
                 t(Div),
                 t(Lt),
+                t(Tilde),
             ]
         );
     }

@@ -66,7 +66,6 @@ impl<'a> Parser<'a> {
         self.peek().map(|t| t.kind == kind).unwrap_or(false)
     }
 
-    // Consume a token of a given kind if present; otherwise, do nothing
     fn eat(&mut self, kind: TokenKind) -> bool {
         if self.next_is(kind) {
             self.tokens.pop();
@@ -76,7 +75,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Expect and consume a token of a specific kind, returning an error if not found
     fn expect(&mut self, kind: TokenKind) -> ParseResult<Token> {
         if self.next_is(kind) {
             self.next()
@@ -96,7 +94,6 @@ impl<'a> Parser<'a> {
     fn parse_program(&mut self) -> ParseResult<Program> {
         let mut stmts = vec![];
 
-        // Parse statements until input is empty
         while !self.tokens.is_empty() {
             stmts.push(self.parse_stmt()?);
         }
@@ -110,22 +107,16 @@ impl<'a> Parser<'a> {
 
         match tok.kind {
             TokenKind::Assign => {
-                // Expect an identifier after :=
-                let var_text = self.expect(TokenKind::Id)?.text.to_string();
-                let expr = self.parse_expr()?; // Parse right-hand side
-                Ok(Stmt::Assign(id(&var_text), expr))
+                let lhs = id(self.expect(TokenKind::Id)?.text);
+                let rhs = self.parse_expr()?;
+                Ok(Stmt::Assign(lhs, rhs))
             }
-            TokenKind::Print => Ok(Stmt::Print(self.parse_expr()?)), // Parse print statement
-            TokenKind::Read => {
-                // Expect an identifier after $read
-                let var_text = self.expect(TokenKind::Id)?.text.to_string();
-                Ok(Stmt::Read(id(&var_text)))
-            }
+            TokenKind::Print => Ok(Stmt::Print(self.parse_expr()?)),
+            TokenKind::Read => Ok(Stmt::Read(id(self.expect(TokenKind::Id)?.text))),
             TokenKind::If => {
-                // Parse condition
                 let guard = self.parse_expr()?;
-                let tt = self.parse_block()?; // "then" block
-                let ff = self.parse_block()?; // "else" block
+                let tt = self.parse_block()?;
+                let ff = self.parse_block()?;
                 Ok(Stmt::If { guard, tt, ff })
             }
             _ => Err(ParseError(format!(
@@ -155,16 +146,13 @@ impl<'a> Parser<'a> {
 
         match tok.kind {
             TokenKind::Id => Ok(Var(id(tok.text))),
-            TokenKind::Num => Ok(Const(tok.text.parse::<i64>().unwrap())),
+            TokenKind::Num => Ok(Const(tok.text.parse().unwrap())),
             TokenKind::Plus => self.parse_binop(BOp::Add),
             TokenKind::Minus => self.parse_binop(BOp::Sub),
             TokenKind::Mul => self.parse_binop(BOp::Mul),
             TokenKind::Div => self.parse_binop(BOp::Div),
             TokenKind::Lt => self.parse_binop(BOp::Lt),
-            TokenKind::Tilde => {
-                let inner = Box::new(self.parse_expr()?); // Parse operand for negation
-                Ok(Negate(inner))
-            }
+            TokenKind::Tilde => Ok(Negate(Box::new(self.parse_expr()?))),
             _ => Err(ParseError(format!(
                 "Expected start of an expression, found `{}`",
                 tok.text
