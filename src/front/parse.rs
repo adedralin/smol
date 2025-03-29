@@ -1,13 +1,13 @@
 //! The parser
 
 use std::fmt::Debug;
-
 use derive_more::derive::Display;
 
 use super::ast::*;
 use super::lex::*;
 use crate::common::id;
 
+// Custom error type for parsing errors
 #[derive(Display)]
 #[display("Parse error: {}", self.0)]
 pub struct ParseError(String);
@@ -18,12 +18,15 @@ impl Debug for ParseError {
     }
 }
 
+// Define a result type for parsing functions
 type ParseResult<T> = Result<T, ParseError>;
 
+// Entry point: Parse an input string into an AST representation of a smol program
 pub fn parse(input: &str) -> Result<Program, ParseError> {
     let mut parser = Parser::new(input);
-    let program = parser.parse_program()?;
+    let program = parser.parse_program()?;  // Parse entire program
     if !parser.tokens.is_empty() {
+        // Ensure that all tokens are consumed
         Err(ParseError(
             "There are still leftover tokens after reading a whole program.".to_string(),
         ))
@@ -32,33 +35,38 @@ pub fn parse(input: &str) -> Result<Program, ParseError> {
     }
 }
 
+// The Parser struct holds the list of tokens to be processed
 struct Parser<'input> {
-    /// Rest of the input, ordered in reverse.
+    /// Tokens to be parsed, stored in reverse order (for easy popping)
     tokens: Vec<Token<'input>>,
 }
 
 impl<'a> Parser<'a> {
+    // Constructor: Creates a new parser instance from an input string
     fn new(input: &'a str) -> Self {
         let mut tokens = get_tokens(input);
-        tokens.reverse();
+        tokens.reverse(); // Reverse for easy popping
         Parser { tokens }
     }
 
+    // Look at the next token without consuming it
     fn peek(&self) -> Option<Token> {
         self.tokens.last().copied()
     }
 
+    // Consume the next token, returning an error if input is exhausted
     fn next(&mut self) -> ParseResult<Token> {
         self.tokens
             .pop()
             .ok_or(ParseError("Unexpected end of input.".to_owned()))
     }
 
+    // Check if the next token matches a specific kind without consuming it
     fn next_is(&self, kind: TokenKind) -> bool {
         self.peek().map(|t| t.kind == kind).unwrap_or(false)
     }
 
-    // Consume the token of given kind if able, return whether it is consumed
+    // Consume a token of a given kind if present; otherwise, do nothing
     fn eat(&mut self, kind: TokenKind) -> bool {
         if self.next_is(kind) {
             self.tokens.pop();
@@ -68,7 +76,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // Expect a token of given kind
+    // Expect and consume a token of a specific kind, returning an error if not found
     fn expect(&mut self, kind: TokenKind) -> ParseResult<Token> {
         if self.next_is(kind) {
             self.next()
@@ -84,61 +92,91 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Parse a smol program (list of statements)
     fn parse_program(&mut self) -> ParseResult<Program> {
-        todo!()
+        let mut stmts = vec![];
+
+        // Parse statements until input is empty
+        while !self.tokens.is_empty() {
+            stmts.push(self.parse_stmt()?);
+        }
+
+        Ok(Program { stmts })
     }
 
+    // Parse a statement
     fn parse_stmt(&mut self) -> ParseResult<Stmt> {
-        let tok = self.next()?;
+        let tok = self.next()?; // Read the first token
+
         match tok.kind {
-            TokenKind::Assign => todo!(),
-            TokenKind::Print => todo!(),
-            TokenKind::Read => todo!(),
-            TokenKind::If => todo!(),
+            TokenKind::Assign => {
+                // Expect an identifier after :=
+                let var_text = self.expect(TokenKind::Id)?.text.to_string();
+                let expr = self.parse_expr()?; // Parse right-hand side
+                Ok(Stmt::Assign(id(&var_text), expr))
+            }
+            TokenKind::Print => Ok(Stmt::Print(self.parse_expr()?)), // Parse print statement
+            TokenKind::Read => {
+                // Expect an identifier after $read
+                let var_text = self.expect(TokenKind::Id)?.text.to_string();
+                Ok(Stmt::Read(id(&var_text)))
+            }
+            TokenKind::If => {
+                // Parse condition
+                let guard = self.parse_expr()?;
+                let tt = self.parse_block()?; // "then" block
+                let ff = self.parse_block()?; // "else" block
+                Ok(Stmt::If { guard, tt, ff })
+            }
             _ => Err(ParseError(format!(
-                "Expected start of a statement, found {}",
+                "Expected start of a statement, found `{}`",
                 tok.text
             ))),
         }
     }
 
+    // Parse a block `{ stmt* }`
     fn parse_block(&mut self) -> ParseResult<Vec<Stmt>> {
         let mut stmts = vec![];
 
-        self.expect(TokenKind::LBrace)?;
-        while !self.eat(TokenKind::RBrace) {
+        self.expect(TokenKind::LBrace)?; // Ensure block starts with `{`
+        while !self.eat(TokenKind::RBrace) { // Read until `}`
             stmts.push(self.parse_stmt()?);
         }
 
         Ok(stmts)
     }
 
+    // Parse an expression
     fn parse_expr(&mut self) -> ParseResult<Expr> {
         use Expr::*;
 
-        let tok = self.next()?;
+        let tok = self.next()?; // Get the next token
 
         match tok.kind {
-            TokenKind::Id => todo!(),
-            TokenKind::Num => todo!(),
-            TokenKind::Plus => todo!(),
-            TokenKind::Minus => todo!(),
-            TokenKind::Mul => todo!(),
-            TokenKind::Div => todo!(),
-            TokenKind::Lt => todo!(),
-            TokenKind::Tilde => todo!(),
+            TokenKind::Id => Ok(Var(id(tok.text))),
+            TokenKind::Num => Ok(Const(tok.text.parse::<i64>().unwrap())),
+            TokenKind::Plus => self.parse_binop(BOp::Add),
+            TokenKind::Minus => self.parse_binop(BOp::Sub),
+            TokenKind::Mul => self.parse_binop(BOp::Mul),
+            TokenKind::Div => self.parse_binop(BOp::Div),
+            TokenKind::Lt => self.parse_binop(BOp::Lt),
+            TokenKind::Tilde => {
+                let inner = Box::new(self.parse_expr()?); // Parse operand for negation
+                Ok(Negate(inner))
+            }
             _ => Err(ParseError(format!(
-                "Expected start of a statement, found {}",
+                "Expected start of an expression, found `{}`",
                 tok.text
             ))),
         }
     }
 
-    // helper: read and parse both sides of given binary operation
+    // Parse a binary operation (e.g., `+`, `-`, `*`, `<`)
     fn parse_binop(&mut self, op: BOp) -> ParseResult<Expr> {
         let lhs = Box::new(self.parse_expr()?);
         let rhs = Box::new(self.parse_expr()?);
-        Ok(Expr::BinOp { op, lhs, rhs })
+        Ok(Expr::BinOp { op, lhs, rhs }) // Construct binary operation AST node
     }
 }
 

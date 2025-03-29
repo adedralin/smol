@@ -89,31 +89,57 @@ impl<'input> Lexer<'input> {
 
     /// Has the lexer reached the end of input?
     pub fn end_of_input(&self) -> bool {
-        self.pos == self.input.len()
+        self.pos >= self.input.len()
     }
 
     // Skip comments and whitespace
     fn skip_whitespace(&mut self) {
         if let Some(m) = self.whitespace.find(&self.input[self.pos..]) {
-            self.pos += m.end()
+            self.pos += m.end();
         }
     }
 
     /// Get the next token if possible.
-    ///
-    /// The return value should be:
-    /// - None if there are no more tokens (reached the end of input).
-    /// - Some(token) where the token is the next token.
-    /// - Some(Error) if none of the recognizers work, i.e. if there is a lexer error.
     pub fn next<'a>(&'a mut self) -> Option<Token<'input>> {
-        todo!()
+        self.skip_whitespace();
+        
+        if self.end_of_input() {
+            return None;
+        }
+
+        for (regex, kind) in &self.matchers {
+            if let Some(m) = regex.find(&self.input[self.pos..]) {
+                let token = Token {
+                    kind: *kind,
+                    text: &self.input[self.pos..self.pos + m.end()],
+                };
+                self.pos += m.end();
+                return Some(token);
+            }
+        }
+
+        // If no match, return an error token for unrecognized characters.
+        let error_char = &self.input[self.pos..self.pos + 1];
+        self.pos += 1;
+        Some(Token {
+            kind: TokenKind::Error,
+            text: error_char,
+        })
     }
 }
 
 /// Read all the tokens from input
 pub fn get_tokens(input: &str) -> Vec<Token> {
-    todo!()
+    let mut lexer = Lexer::new(input);
+    let mut tokens = Vec::new();
+
+    while let Some(token) = lexer.next() {
+        tokens.push(token);
+    }
+
+    tokens
 }
+
 
 #[cfg(test)]
 mod tests {
