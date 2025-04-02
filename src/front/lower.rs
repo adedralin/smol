@@ -65,15 +65,15 @@ impl Lower {
     }
 
     fn lower_program(mut self, program: ast::Program) -> tir::Program {
-        self.tv.push(Label(id("entry")));
+        self.tv.push(Label(id("entry"))); // entry label, which marks the starting point of the program's control flow
 
-        for stmt in program.stmts {
+        for stmt in program.stmts { // Iterate over statements in the program and lower each one
             self.lower_stmt(stmt);
         }
         // Close the last basic block
         self.tv.push(Term(Terminator::Exit));
 
-        tir::Program {
+        tir::Program { //return the following program structure
             decl: self.decl,
             block: construct_cfg(self.tv),
         }
@@ -155,5 +155,56 @@ impl Lower {
 }
 
 fn construct_cfg(tv: Vec<TvEntry>) -> Map<Id, Block> {
-    todo!()
+
+
+    let mut cfg: Map<Id, Block> = Map::new(); //Final CFG
+    let mut current_block = Block {
+        insn: Vec::new(),
+        term: Terminator::Exit, //Default terminator
+    };
+
+    let mut current_label: Option<Id> = None;
+
+    for entry in tv {
+        match entry {
+            //If a label is encountered, store the previous block and start a new one
+            TvEntry::Label(label) => {
+                if let Some(label_id) = current_label {
+                    //Store the completed block before starting a new one
+                    cfg.insert(label_id, current_block);
+                }
+                //Start a new block with the new label
+                current_block = Block {
+                    insn: Vec::new(),
+                    term: Terminator::Exit, //Default terminator
+                };
+                current_label = Some(label);
+            }
+            //If an inner instruction is encountered, add it to the current block
+            TvEntry::Inner(insn) => {
+                current_block.insn.push(insn);
+            }
+            //If a terminator is encountered, close and store the block immediately
+            TvEntry::Term(term) => {
+                current_block.term = term;
+                if let Some(label_id) = current_label {
+                    //Store teh block with the label
+                    cfg.insert(label_id, current_block);
+                }
+                //Prepare for a new block
+                current_block = Block {
+                    insn: Vec::new(),
+                    term: Terminator::Exit,
+                };
+                current_label = None;
+            }
+        }
+    }
+
+    //If the last block was not stored, insert it
+    if let Some(label_id) = current_label {
+        cfg.insert(label_id, current_block);
+    }
+
+    cfg
 }
